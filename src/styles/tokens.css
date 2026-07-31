@@ -1,0 +1,125 @@
+/* ------------------------------------------------------------------
+   Design tokens — grounded editorial atlas.
+
+   Dark charcoal chrome, warm parchment maps, aged brass keylines,
+   restrained crimson. Corners are sharp; there are no glows, no glass
+   panels and no gradients doing structural work.
+   ------------------------------------------------------------------ */
+
+:root {
+  /* Chrome ------------------------------------------------------- */
+  --bg: #0e0f11;
+  --bg-deep: #08090a;
+  --s1: #141619;
+  --s2: #1a1d21;
+  --s3: #212529;
+  --s4: #2a2f34;
+
+  --line: #2b3037;
+  --line-soft: #22262b;
+  --line-strong: #3a4149;
+
+  --text: #e6e2d9;
+  --text-2: #b3ada0;
+  --text-3: #837e73;
+  --text-4: #5f5b53;
+
+  /* Accents ------------------------------------------------------ */
+  --brass: #b8894e;
+  --brass-lit: #d9ac71;
+  --brass-dim: #7d5f36;
+  --brass-wash: rgba(184, 137, 78, 0.12);
+
+  --crimson: #a3372f;
+  --crimson-lit: #cb5a4c;
+  --crimson-wash: rgba(163, 55, 47, 0.14);
+
+  --verd: #4e7a6b;
+  --verd-lit: #6fa08d;
+
+  --amber: #c9962f;
+  --steel: #5b7288;
+  --violet: #6b5a86;
+
+  /* Parchment (maps, print surfaces) ----------------------------- */
+  --paper: #e3d7bb;
+  --paper-2: #d6c7a4;
+  --paper-3: #c6b58e;
+  --paper-ink: #3b3222;
+  --paper-ink-2: #6b5c42;
+  --paper-line: #a8956d;
+  --sea-paper: #c3c2a4;
+
+  /* Status ------------------------------------------------------- */
+  --st-canon: #b8894e;
+  --st-draft: #5b7288;
+  --st-alt: #6b5a86;
+  --st-review: #c9962f;
+  --st-deprecated: #6a6259;
+
+  /* Entity type accents — distinct but from one family ----------- */
+  --t-region: #6f8f6a;
+  --t-city: #c08a4a;
+  --t-district: #a8804f;
+  --t-faction: #9d4f45;
+  --t-npc: #c2a05a;
+  --t-quest: #4f8296;
+  --t-item: #8f7fb0;
+  --t-material: #7d8b96;
+  --t-machine: #8a8461;
+  --t-creature: #6d8f7d;
+  --t-spell: #7a6bab;
+  --t-food: #97a15c;
+  --t-religion: #a97b8b;
+  --t-mechanic: #6a8ba3;
+  --t-skill: #b08a55;
+  --t-event: #8d8378;
+  --t-war: #b2453a;
+  --t-route: #91856a;
+  --t-note: #7b8794;
+
+  /* Type --------------------------------------------------------- */
+  --ff-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, 'Times New Roman', serif;
+  --ff-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ff-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --fs-micro: 10.5px;
+  --fs-label: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-base: 14px;
+  --fs-md: 15.5px;
+  --fs-lg: 19px;
+  --fs-xl: 25px;
+  --fs-2xl: 34px;
+  --fs-3xl: 46px;
+
+  /* Space -------------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 22px;
+  --sp-6: 30px;
+  --sp-7: 44px;
+
+  --r: 2px;
+  --r-lg: 3px;
+
+  --nav-w: 268px;
+  --header-h: 52px;
+
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 6px 22px -8px rgba(0, 0, 0, 0.8);
+  --shadow-3: 0 18px 50px -18px rgba(0, 0, 0, 0.92);
+
+  --focus: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--brass);
+
+  color-scheme: dark;
+}
+
+/* Light print mode — used by the paper map surface and print styles. */
+.paper-surface {
+  --text: var(--paper-ink);
+  --text-2: var(--paper-ink-2);
+  --line: var(--paper-line);
+}
