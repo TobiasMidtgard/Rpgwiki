@@ -62,6 +62,13 @@ const SEA = { x: -WORLD_W * 2, y: -WORLD_H * 3, w: WORLD_W * 5, h: WORLD_H * 7 }
 const OVERSCAN = 0.3
 
 /**
+ * Ceiling on that margin in CSS pixels per side. On a wide display 30% of the
+ * stage is a great deal of extra chart to draw and to hold as a compositor
+ * texture, for no more benefit than a few hundred pixels of slide already buys.
+ */
+const OVERSCAN_MAX_PX = 400
+
+/**
  * Area covered by the sea hatching. The flat sea colour can span the whole
  * plane cheaply, but a tiled pattern cannot: this is bounded to what panning
  * can actually bring on screen.
@@ -455,8 +462,8 @@ export function WorldMap({
 
     // Slid far enough that we are about to run off the pre-drawn edge: fold the
     // slide into the view, repaint once, and start sliding again from there.
-    const budgetX = rect.width * OVERSCAN * 0.85
-    const budgetY = rect.height * OVERSCAN * 0.85
+    const budgetX = Math.min(rect.width * OVERSCAN, OVERSCAN_MAX_PX) * 0.85
+    const budgetY = Math.min(rect.height * OVERSCAN, OVERSCAN_MAX_PX) * 0.85
     if (Math.abs(px) > budgetX || Math.abs(py) > budgetY) {
       // Synchronous: the layout effect drops the slide as part of the same
       // commit, so the chart never shows the old viewBox without its transform.
@@ -561,15 +568,18 @@ export function WorldMap({
    * the same scale. The element is inset by the same fraction, so what lands
    * over the stage is precisely `view` and everything else is the slide budget.
    */
-  const over = preview ? 0 : OVERSCAN
+  const overX = preview || size.w <= 0 ? 0 : Math.min(OVERSCAN, OVERSCAN_MAX_PX / size.w)
+  const overY = preview || size.h <= 0 ? 0 : Math.min(OVERSCAN, OVERSCAN_MAX_PX / size.h)
   const vb = {
-    x: view.x - view.w * over,
-    y: view.y - view.h * over,
-    w: view.w * (1 + 2 * over),
-    h: view.h * (1 + 2 * over),
+    x: view.x - view.w * overX,
+    y: view.y - view.h * overY,
+    w: view.w * (1 + 2 * overX),
+    h: view.h * (1 + 2 * overY),
   }
-  const inset = `${-over * 100}%`
-  const span = `${(1 + 2 * over) * 100}%`
+  const insetX = `${-overX * 100}%`
+  const insetY = `${-overY * 100}%`
+  const spanX = `${(1 + 2 * overX) * 100}%`
+  const spanY = `${(1 + 2 * overY) * 100}%`
   const s = (n: number) => n * px
   /** Show a label only once the view is zoomed in past `maxPx` world-units-per-pixel. */
   const showLabel = (maxPx: number) => px <= maxPx
@@ -780,7 +790,18 @@ export function WorldMap({
       <svg
         ref={svgRef}
         viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-        style={{ position: 'absolute', left: inset, top: inset, width: span, height: span, willChange: 'transform' }}
+        style={{
+          position: 'absolute',
+          left: insetX,
+          top: insetY,
+          width: spanX,
+          height: spanY,
+          // Promoted only for the duration of a gesture. The overscanned chart
+          // is over two and a half times the area of the stage, and on a large
+          // display at 2x device pixels a permanent layer for it is a texture
+          // measured in hundreds of megabytes.
+          willChange: dragging ? 'transform' : undefined,
+        }}
         preserveAspectRatio="xMidYMid slice"
         onKeyDown={onKeyDown}
         tabIndex={preview ? -1 : 0}
