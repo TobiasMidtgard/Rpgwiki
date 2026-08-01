@@ -10,6 +10,12 @@ Every push to the default branch rebuilds and republishes it
 (`.github/workflows/deploy-pages.yml`). The deploy fails rather than shipping if the TypeScript
 build or the seed validator does.
 
+> **One-time setup:** Pages has to be switched on by hand once, under
+> **Settings → Pages → Build and deployment → Source: GitHub Actions**. A workflow cannot do this
+> for you: creating a Pages site needs repository-admin rights, and the automatic `GITHUB_TOKEN`
+> is deliberately not granted them. Until it is switched on, the deploy job fails with
+> *"Resource not accessible by integration"*. Re-run the workflow afterwards and it will publish.
+
 Because there is no server, the world you edit on the published site lives in *your* browser.
 Two people opening the link get the same seed and then diverge — use **Data, backup and import**
 to move a world between browsers or people.
