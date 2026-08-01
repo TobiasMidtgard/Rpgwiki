@@ -275,6 +275,58 @@ export const entities: SeedEntity[] = [
     },
   }),
 
+  /* --------------------------------- worked alternatives ---------- */
+  E({
+    id: 'note.alt-sky-city-airship',
+    type: 'note',
+    name: 'Alternative: the Sky City floats on airships, not a thermal',
+    status: 'alt',
+    summary: 'A competing answer to how the Sky City stays up, kept for comparison rather than discarded.',
+    tags: ['alternative', 'city', 'mechanics'],
+    fields: {
+      noteKind: 'Pitch',
+      resolution: 'Open',
+      body:
+        'The seed holds [[city.sky-city|the Sky City]] up on a permanent thermal over [[region.anvil-shelf|the Anvil Shelf]]. ' +
+        'The alternative is that it is not held up by the land at all: a moored fleet, rebuilt continuously, that could in ' +
+        'principle go somewhere else.\n\n' +
+        'That version buys a great deal. It makes the city genuinely mobile as a late-campaign threat or refuge, it makes ' +
+        'the [[city.gilded-ascent|Gilded Ascent]]\'s creditors nervous in a way that is dramatically useful, and it removes ' +
+        'the need to invent a permanent atmospheric feature.\n\n' +
+        'It costs something too. A fleet cannot be blockaded at a lift head, which deletes the cleanest political ' +
+        'chokepoint in the setting, and "wealthy city that can leave" is a harder thing to keep grounded than "wealthy ' +
+        'city that cannot". Kept here as a real option, not a rejected one.',
+      options: [
+        'Thermal — current seed. Fixed position, one chokepoint, easy to besiege',
+        'Airship fleet — mobile, ungovernable, harder to keep grounded',
+        'Both: a thermal-moored core with a detachable merchant fleet',
+      ],
+    },
+  }),
+
+  E({
+    id: 'note.deprecated-single-guild',
+    type: 'note',
+    name: 'Deprecated: one guild running all trade',
+    status: 'deprecated',
+    summary: 'An early shape for the economy, superseded by the several-rival-houses model actually used.',
+    tags: ['deprecated', 'economy'],
+    fields: {
+      noteKind: 'Decision',
+      resolution: 'Decided',
+      body:
+        'An early pass at the seed gave the continent a single merchants\' guild that licensed all long-distance trade ' +
+        'from [[city.gilded-ascent|the Gilded Ascent]]. It was dropped.\n\n' +
+        'The reason: a monopoly has no internal politics. Every quest hook reduced to "do a job for the guild or defy the ' +
+        'guild", and the cities stopped having leverage of their own. The shipped version splits that power between ' +
+        'chartered houses that vote their ledgers and can be played against each other, which gives the player somewhere ' +
+        'to stand.\n\n' +
+        'Kept as a record of the decision, not as a live option. Deprecated entries stay visible so the reasoning is not ' +
+        'lost and the same idea is not re-proposed later.',
+      options: ['Superseded — do not revive without addressing the no-internal-politics problem'],
+    },
+  }),
+
   E({
     id: 'note.next-steps',
     type: 'note',
@@ -321,4 +373,7 @@ export const relations: SeedRelation[] = [
   R('note.next-steps', 'related_to', 'note.player-scope'),
   R('note.next-steps', 'related_to', 'note.magic-cost-model'),
   R('note.world-name', 'related_to', REGION.easternDeep),
+  R('note.alt-sky-city-airship', 'related_to', CITY.skyCity),
+  R('note.alt-sky-city-airship', 'related_to', 'note.sky-city-lift'),
+  R('note.deprecated-single-guild', 'related_to', CITY.gildedAscent),
 ]

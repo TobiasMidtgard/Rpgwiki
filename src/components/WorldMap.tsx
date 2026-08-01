@@ -186,6 +186,7 @@ export function WorldMap({
   const svgRef = useRef<SVGSVGElement>(null)
 
   const [view, setView] = useState(initialView ?? { x: 0, y: 0, w: WORLD_W, h: WORLD_H })
+  const [size, setSize] = useState({ w: 0, h: 0 })
   const [dragging, setDragging] = useState(false)
   const pan = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null)
   const markerDrag = useRef<{ id: string; moved: boolean } | null>(null)
@@ -273,6 +274,43 @@ export function WorldMap({
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [zoomBy, toWorld, preview])
+
+  /**
+   * Keep the viewBox aspect equal to the element's, so `slice` never crops and
+   * screen-to-world conversion stays exact. On first measure the view is fitted
+   * to show the whole world.
+   */
+  useEffect(() => {
+    const el = stage.current
+    if (!el) return
+    let fitted = false
+    const apply = (w: number, h: number) => {
+      if (w <= 0 || h <= 0) return
+      setSize({ w, h })
+      const aspect = w / h
+      setView((v) => {
+        if (!fitted) {
+          fitted = true
+          // Fit the whole world with a small margin, letterboxing into sea.
+          const worldAspect = WORLD_W / WORLD_H
+          const vw = aspect >= worldAspect ? WORLD_H * aspect * 1.02 : WORLD_W * 1.02
+          const vh = vw / aspect
+          return { x: (WORLD_W - vw) / 2, y: (WORLD_H - vh) / 2, w: vw, h: vh }
+        }
+        const nh = v.w / aspect
+        if (Math.abs(nh - v.h) < 0.5) return v
+        return clampView({ ...v, y: v.y + (v.h - nh) / 2, h: nh })
+      })
+    }
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect
+      if (r) apply(r.width, r.height)
+    })
+    ro.observe(el)
+    const rect = el.getBoundingClientRect()
+    apply(rect.width, rect.height)
+    return () => ro.disconnect()
+  }, [])
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (preview) return
@@ -384,9 +422,13 @@ export function WorldMap({
     })
   }, [selectedId, world, preview])
 
-  const zoom = WORLD_W / view.w
-  const s = (n: number) => n / zoom // screen-constant size in world units
-  const showLabel = (min: number) => zoom >= min
+  // World units per CSS pixel. Marker glyphs and labels are sized in real
+  // screen pixels, so they stay legible at any zoom and at any panel size.
+  const px = size.w > 0 ? view.w / size.w : view.w / WORLD_W
+  const s = (n: number) => n * px
+  /** Detail thresholds are in rendered pixels per 100 world units. */
+  const detail = 100 / px
+  const showLabel = (min: number) => detail >= min
 
   if (!world) return null
 
@@ -441,7 +483,7 @@ export function WorldMap({
           y={-200}
           width={WORLD_W + 400}
           height={WORLD_H + 400}
-          fill={paper ? '#c9c6a6' : '#16232c'}
+          fill={paper ? '#aebfbd' : '#16232c'}
         />
         {paper ? (
           <g clipPath={`url(#sea-${uid})`} opacity={0.5}>
@@ -449,7 +491,7 @@ export function WorldMap({
               <path
                 key={i}
                 d={`M-200,${-160 + i * 28} H${WORLD_W + 200}`}
-                stroke="#b3ae8c"
+                stroke="#93a8a6"
                 strokeWidth={0.8}
                 fill="none"
                 opacity={0.55}
@@ -460,20 +502,20 @@ export function WorldMap({
 
         {/* Coastal shading: wide strokes on the coast, clipped to the sea */}
         <g clipPath={`url(#sea-${uid})`}>
-          {[26, 17, 9].map((w, i) => (
+          {[30, 20, 11, 5].map((w, i) => (
             <path
               key={w}
               d={landPath}
               fill="none"
-              stroke={paper ? '#a89a72' : '#20323d'}
+              stroke={paper ? '#8fa39f' : '#20323d'}
               strokeWidth={w}
-              opacity={paper ? 0.16 + i * 0.09 : 0.28 + i * 0.14}
+              opacity={paper ? 0.16 + i * 0.1 : 0.24 + i * 0.13}
             />
           ))}
         </g>
 
         {/* Land ----------------------------------------------------- */}
-        <path d={landPath} fill={paper ? '#ded2b4' : '#2c3128'} />
+        <path d={landPath} fill={paper ? '#e4d8b8' : '#2c3128'} />
 
         <g clipPath={`url(#land-${uid})`}>
           {/* Biome fills */}
@@ -481,7 +523,7 @@ export function WorldMap({
             ? regionPaths.map((r) => {
                 const p = BIOME_PAINT[r.id]
                 if (!p) return null
-                return <path key={`b-${r.key}`} d={r.d} fill={paper ? p.paper : p.color} opacity={paper ? 0.82 : 0.95} />
+                return <path key={`b-${r.key}`} d={r.d} fill={paper ? p.paper : p.color} opacity={paper ? 0.94 : 0.95} />
               })
             : null}
 
@@ -533,10 +575,10 @@ export function WorldMap({
                   key={`r-${r.key}`}
                   d={r.d}
                   fill="none"
-                  stroke={paper ? '#8a7550' : '#8f9aa4'}
-                  strokeWidth={1.6}
-                  strokeDasharray="6 4"
-                  opacity={0.7}
+                  stroke={paper ? '#7d6842' : '#8f9aa4'}
+                  strokeWidth={2}
+                  strokeDasharray="7 5"
+                  opacity={0.85}
                 />
               ))
             : null}
@@ -558,6 +600,16 @@ export function WorldMap({
                 ))
             : null}
         </g>
+
+        {/* The inked coastline, over the biome fills. */}
+        <path
+          d={landPath}
+          fill="none"
+          stroke={paper ? '#5f5334' : '#0c1116'}
+          strokeWidth={paper ? 2.6 : 2.2}
+          opacity={paper ? 0.75 : 0.85}
+          pointerEvents="none"
+        />
 
         {/* Routes (drawn over the coast so they can reach harbours) --- */}
         {layers.has('sea')
@@ -629,7 +681,7 @@ export function WorldMap({
                   stroke={paper ? '#3b3222' : '#0e0f11'}
                   strokeWidth={s(1.2)}
                 />
-                {showLabel(3.4) ? (
+                {showLabel(9) ? (
                   <text x={s(10)} y={s(3.5)} fontSize={s(11)} fill={inkSoft} className="node-sub" style={{ fontSize: s(11) }}>
                     {m.name}
                   </text>
@@ -664,7 +716,7 @@ export function WorldMap({
                 ) : (
                   <rect x={-s(4)} y={-s(4)} width={s(8)} height={s(8)} fill={paper ? '#efe6cc' : '#1b1f23'} stroke={paper ? '#3b3222' : '#a89070'} strokeWidth={s(1.5)} />
                 )}
-                {showLabel(2.6) ? (
+                {showLabel(7) ? (
                   <text x={0} y={s(15)} fontSize={s(10.5)} textAnchor="middle" fill={inkSoft} style={{ fontSize: s(10.5) }}>
                     {m.name}
                   </text>
@@ -694,7 +746,7 @@ export function WorldMap({
               >
                 <circle r={s(7)} fill="#0e0f11" opacity={0.35} />
                 <path d={`M${-s(3)},${-s(5)} L${s(4)},0 L${-s(3)},${s(5)} Z`} fill="#5fa3bd" stroke="#0e0f11" strokeWidth={s(1)} />
-                {showLabel(4.2) ? (
+                {showLabel(11) ? (
                   <text x={s(10)} y={s(3.5)} fontSize={s(11)} fill={inkSoft} style={{ fontSize: s(11) }}>
                     {m.name}
                   </text>
@@ -710,7 +762,7 @@ export function WorldMap({
               return (
                 <g
                   key={m.id}
-                  transform={`translate(${m.at[0]},${m.at[1]}) scale(${1 / zoom})`}
+                  transform={`translate(${m.at[0]},${m.at[1]}) scale(${px})`}
                   data-marker={m.id}
                   style={{ cursor: editable ? 'move' : 'pointer' }}
                   role={preview ? undefined : 'button'}

@@ -111,51 +111,68 @@ type Draw = (r: () => number, p: Pal) => React.ReactNode
 
 /** The Gilded Ascent — counting houses stacked up a switchback escarpment. */
 const terrace: Draw = (r, p) => {
-  const tiers = 6
   const out: React.ReactNode[] = []
+  const tiers = 9
+  const baseY = 408
+  const step = 30
   for (let t = 0; t < tiers; t++) {
-    const y = 400 - t * 44
-    const x0 = 150 + t * 62
-    const x1 = 1080 - t * 26
-    out.push(
-      <path key={`t${t}`} d={`M${x0},${y + 44}L${x0 + 26},${y}L${x1},${y}L${x1},${y + 44}Z`} fill={t % 2 ? p.mid : p.build} />,
-    )
-    const n = 5 + Math.floor(r() * 4)
-    for (let i = 0; i < n; i++) {
-      const bx = x0 + 40 + ((x1 - x0 - 90) * i) / n + r() * 22
-      const bw = 26 + r() * 34
-      const bh = 26 + r() * 32
-      out.push(<rect key={`b${t}${i}`} x={bx} y={y - bh} width={bw} height={bh} fill={t < 3 ? p.buildDark : p.build} />)
-      // pitched roof
+    const y = baseY - t * step
+    const x0 = 96 + t * 46
+    const x1 = 1112 - t * 22
+    // Retaining wall face, then the terrace deck.
+    out.push(<rect key={`w${t}`} x={x0} y={y} width={x1 - x0} height={step} fill={t % 2 ? p.buildDark : p.mid} />)
+    out.push(<rect key={`d${t}`} x={x0} y={y - 3} width={x1 - x0} height={4} fill={p.accent} opacity={0.34} />)
+    // Course lines in the retaining wall.
+    for (let c = 1; c < 3; c++) {
       out.push(
-        <path
-          key={`r${t}${i}`}
-          d={`M${bx - 3},${y - bh}L${bx + bw / 2},${y - bh - 11}L${bx + bw + 3},${y - bh}Z`}
-          fill={p.accent}
-          opacity={0.55}
-        />,
+        <line key={`c${t}${c}`} x1={x0} y1={y + (step / 3) * c} x2={x1} y2={y + (step / 3) * c} stroke={p.buildDark} strokeWidth={0.8} opacity={0.5} />,
       )
     }
-    // cable hoist
-    if (t < tiers - 1) {
-      out.push(
-        <line key={`c${t}`} x1={x0 + 30} y1={y} x2={x0 + 92} y2={y - 44} stroke={p.accent} strokeWidth={1.4} opacity={0.5} />,
-      )
+    // Counting houses along the terrace: narrow, tall, tightly packed.
+    const n = 12 + Math.floor(r() * 6)
+    for (let i = 0; i < n; i++) {
+      const bx = x0 + 10 + ((x1 - x0 - 26) * i) / n + r() * 8
+      const bw = 12 + r() * 20
+      const bh = 16 + r() * 26
+      out.push(<rect key={`b${t}${i}`} x={bx} y={y - bh} width={bw} height={bh} fill={i % 4 === 0 ? p.buildDark : p.build} />)
+      out.push(<path key={`r${t}${i}`} d={`M${bx - 2},${y - bh}L${bx + bw / 2},${y - bh - 7}L${bx + bw + 2},${y - bh}Z`} fill={p.accent} opacity={0.5} />)
+      // Brass shutters facing the hoists.
+      if (bw > 20) out.push(<rect key={`s${t}${i}`} x={bx + 3} y={y - bh + 6} width={bw - 6} height={3} fill={p.accent} opacity={0.65} />)
     }
   }
-  // The Counting Stair — monumental switchback stair
-  const stair: string[] = ['M560,400']
-  for (let i = 0; i < 9; i++) stair.push(`L${560 + (i % 2 ? 60 : 0)},${400 - i * 30}`, `L${560 + (i % 2 ? 60 : 0) + 34},${400 - i * 30}`)
-  out.push(<path key="stair" d={stair.join('')} fill="none" stroke={p.accent} strokeWidth={5} opacity={0.9} />)
-  out.push(<rect key="crown" x={604} y={106} width={60} height={54} fill={p.buildDark} />)
-  out.push(<path key="crownroof" d="M596,106L634,74L672,106Z" fill={p.accent} />)
+  // Eight cable hoist runs climbing the face.
+  for (let h = 0; h < 8; h++) {
+    const hx = 180 + h * 116
+    out.push(
+      <line key={`h${h}`} x1={hx} y1={baseY + step} x2={hx + 190} y2={baseY - tiers * step} stroke={p.accent} strokeWidth={1.2} opacity={0.4} />,
+    )
+    out.push(<rect key={`hd${h}`} x={hx + 184} y={baseY - tiers * step} width={12} height={9} fill={p.buildDark} />)
+  }
+  // The Counting Stair: one roofed switchback climbing every terrace.
+  const stair: string[] = [`M540,${baseY + step}`]
+  for (let i = 0; i < tiers * 2; i++) {
+    const y = baseY + step - i * (step / 2)
+    stair.push(`L${540 + (i % 2 ? 46 : 0)},${y}`, `L${540 + (i % 2 ? 46 : 0) + 26},${y}`)
+  }
+  out.push(<path key="stair" d={stair.join('')} fill="none" stroke={p.accent} strokeWidth={4.5} opacity={0.95} />)
+  const crownY = baseY - tiers * step - 46
+  out.push(<rect key="crown" x={556} y={crownY} width={64} height={48} fill={p.buildDark} />)
+  out.push(<path key="crownroof" d={`M546,${crownY}L588,${crownY - 30}L630,${crownY}Z`} fill={p.accent} />)
+  out.push(<rect key="crownband" x={556} y={crownY + 16} width={64} height={4} fill={p.accent} opacity={0.8} />)
+  // Wharf water at the foot.
+  out.push(<rect key="water" x={0} y={baseY + step} width={W} height={H - baseY - step} fill={mix(p.near, '#16222b', 0.45)} />)
+  for (let i = 0; i < 14; i++) {
+    out.push(
+      <path key={`rp${i}`} d={`M${r() * 1200},${baseY + step + 8 + r() * 30} q16,-3 32,0`} fill="none" stroke={p.accent} strokeWidth={1} opacity={0.2} />,
+    )
+  }
   return out
 }
 
 /** The Sky City — a moored ring riding a thermal, tethered to nothing below. */
 const skyring: Draw = (r, p) => {
   const cx = 600
-  const cy = 210
+  const cy = 236
   const out: React.ReactNode[] = []
   out.push(<ellipse key="haze" cx={cx} cy={cy + 96} rx={430} ry={54} fill={p.accent} opacity={0.09} />)
   // Hull ring
@@ -181,9 +198,9 @@ const skyring: Draw = (r, p) => {
     out.push(<rect key={`h${i}`} x={bx - 9} y={by - bh} width={18} height={bh} fill={i % 3 ? p.build : p.buildDark} />)
   }
   // The Mooring Crown
-  out.push(<rect key="spire" x={cx - 9} y={cy - 150} width={18} height={172} fill={p.buildDark} />)
-  out.push(<circle key="crown" cx={cx} cy={cy - 150} r={30} fill="none" stroke={p.accent} strokeWidth={6} />)
-  out.push(<circle key="crown2" cx={cx} cy={cy - 150} r={15} fill={p.accent} opacity={0.5} />)
+  out.push(<rect key="spire" x={cx - 9} y={cy - 118} width={18} height={140} fill={p.buildDark} />)
+  out.push(<circle key="crown" cx={cx} cy={cy - 118} r={30} fill="none" stroke={p.accent} strokeWidth={6} />)
+  out.push(<circle key="crown2" cx={cx} cy={cy - 118} r={15} fill={p.accent} opacity={0.5} />)
   // Counterweights hanging beneath
   for (let i = 0; i < 5; i++) {
     const wx = cx - 240 + i * 120
@@ -251,8 +268,8 @@ const canopy: Draw = (r, p) => {
     const w = 46 + (i % 2) * 22
     out.push(<path key={`tk${i}`} d={`M${tx - w / 2 - 12},440L${tx - w / 2},120L${tx + w / 2},120L${tx + w / 2 + 12},440Z`} fill={p.buildDark} />)
     // canopy mass
-    out.push(<ellipse key={`cp${i}`} cx={tx} cy={96 + r() * 26} rx={110 + r() * 44} ry={54 + r() * 20} fill={p.mid} opacity={0.94} />)
-    out.push(<ellipse key={`cp2${i}`} cx={tx - 24} cy={78 + r() * 20} rx={72} ry={34} fill={p.far} opacity={0.5} />)
+    out.push(<ellipse key={`cp${i}`} cx={tx} cy={132 + r() * 22} rx={110 + r() * 44} ry={54 + r() * 20} fill={p.mid} opacity={0.94} />)
+    out.push(<ellipse key={`cp2${i}`} cx={tx - 24} cy={116 + r() * 18} rx={72} ry={34} fill={p.far} opacity={0.5} />)
     // redoubts on the trunk
     for (let d = 0; d < 3; d++) {
       const y = 190 + d * 74
@@ -355,7 +372,7 @@ const sieve: Draw = (r, p) => {
   // Sifting towers
   for (let i = 0; i < 7; i++) {
     const tx = 90 + i * 168 + r() * 24
-    const th = 120 + r() * 96
+    const th = 108 + r() * 68
     const ty = 300 - th
     out.push(<path key={`tw${i}`} d={`M${tx - 26},300L${tx - 15},${ty}L${tx + 15},${ty}L${tx + 26},300Z`} fill={p.buildDark} />)
     for (let s = 0; s < 4; s++) {
@@ -373,11 +390,11 @@ const sieve: Draw = (r, p) => {
     out.push(<rect key={`sb${i}`} x={bx + 6} y={by} width={52} height={22} fill={p.buildDark} />)
   }
   // The Great Sieve
-  out.push(<ellipse key="gs" cx={600} cy={196} rx={132} ry={40} fill="none" stroke={p.accent} strokeWidth={7} />)
+  out.push(<ellipse key="gs" cx={600} cy={214} rx={132} ry={40} fill="none" stroke={p.accent} strokeWidth={7} />)
   for (let i = 0; i < 11; i++) {
-    out.push(<line key={`gsl${i}`} x1={470 + i * 26} y1={168} x2={470 + i * 26} y2={224} stroke={p.accent} strokeWidth={1.6} opacity={0.65} />)
+    out.push(<line key={`gsl${i}`} x1={470 + i * 26} y1={186} x2={470 + i * 26} y2={242} stroke={p.accent} strokeWidth={1.6} opacity={0.65} />)
   }
-  out.push(<line key="gsa" x1={600} y1={196} x2={600} y2={300} stroke={p.buildDark} strokeWidth={12} />)
+  out.push(<line key="gsa" x1={600} y1={214} x2={600} y2={300} stroke={p.buildDark} strokeWidth={12} />)
   return out
 }
 
@@ -564,13 +581,13 @@ const weir: Draw = (r, p) => {
   }
   // The Weir Gates — the two great towers
   ;[330, 830].forEach((tx, i) => {
-    out.push(<path key={`tw${i}`} d={`M${tx - 42},300L${tx - 32},86L${tx + 32},86L${tx + 42},300Z`} fill={p.buildDark} />)
-    out.push(<rect key={`tc${i}`} x={tx - 46} y={70} width={92} height={20} fill={p.build} />)
+    out.push(<path key={`tw${i}`} d={`M${tx - 42},300L${tx - 32},124L${tx + 32},124L${tx + 42},300Z`} fill={p.buildDark} />)
+    out.push(<rect key={`tc${i}`} x={tx - 46} y={108} width={92} height={20} fill={p.build} />)
     for (let w = 0; w < 4; w++) {
-      out.push(<rect key={`tv${i}${w}`} x={tx - 10} y={120 + w * 44} width={20} height={22} fill={p.accent} opacity={0.5} />)
+      out.push(<rect key={`tv${i}${w}`} x={tx - 10} y={158 + w * 40} width={20} height={22} fill={p.accent} opacity={0.5} />)
     }
   })
-  out.push(<path key="span" d="M330,96 Q580,42 830,96" fill="none" stroke={p.build} strokeWidth={9} />)
+  out.push(<path key="span" d="M330,134 Q580,80 830,134" fill="none" stroke={p.build} strokeWidth={9} />)
   return out
 }
 

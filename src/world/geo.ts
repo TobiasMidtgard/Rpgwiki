@@ -299,7 +299,7 @@ function buildRegionShapes(): RegionShape[] {
       landCell = clipHalfPlane(landCell, SEEDS[i].at, SEEDS[j].at)
     }
     if (landCell.length < 3) continue
-    shapes.push({ id: SEEDS[i].region, biome: SEEDS[i].region, polygon: roughen(landCell, 5.5, 2) })
+    shapes.push({ id: SEEDS[i].region, biome: SEEDS[i].region, polygon: roughen(landCell, 7, 3) })
   }
   return shapes
 }
@@ -554,21 +554,21 @@ export interface BiomePaint {
 }
 
 export const BIOME_PAINT: Record<string, BiomePaint> = {
-  [REGION.borealCrown]: { color: '#3f5a55', paper: '#cfcaa6', motif: 'conifer', label: 'Taiga' },
-  [REGION.ironback]: { color: '#5c5a58', paper: '#c8bda2', motif: 'peak', label: 'Alpine' },
-  [REGION.greatwood]: { color: '#3d5a3a', paper: '#c9cda0', motif: 'forest', label: 'Temperate forest' },
-  [REGION.hollowKarst]: { color: '#77705c', paper: '#dbd2b2', motif: 'karst', label: 'Limestone karst' },
-  [REGION.ascentBasin]: { color: '#6f7845', paper: '#d9d5ab', motif: 'grass', label: 'River grassland' },
-  [REGION.anvilShelf]: { color: '#6a6a5a', paper: '#d2caa8', motif: 'scrub', label: 'Windswept highland' },
-  [REGION.meridianCoast]: { color: '#7e8b47', paper: '#dcd6a4', motif: 'olive', label: 'Mediterranean' },
-  [REGION.ashenSteppe]: { color: '#8a7d55', paper: '#dcd0a5', motif: 'scrub', label: 'Dry steppe' },
-  [REGION.cinderWaste]: { color: '#9c7a4d', paper: '#e0cfa2', motif: 'dune', label: 'Desert' },
-  [REGION.whitePans]: { color: '#b6ab8c', paper: '#e9e1c4', motif: 'salt', label: 'Salt pan' },
-  [REGION.theDrown]: { color: '#4a5c48', paper: '#c6cda6', motif: 'marsh', label: 'Delta marsh' },
-  [REGION.mistfallCoast]: { color: '#54666b', paper: '#cbccae', motif: 'conifer', label: 'Cold coast' },
-  [REGION.aethericScar]: { color: '#5a5170', paper: '#cdc3bc', motif: 'ash', label: 'Anomaly' },
-  [REGION.meridianGulf]: { color: '#2e4a5a', paper: '#c3c2a4', motif: 'none', label: 'Warm sea' },
-  [REGION.easternDeep]: { color: '#233b4a', paper: '#b8bb9e', motif: 'none', label: 'Ocean' },
+  [REGION.borealCrown]: { color: '#3f5a55', paper: '#b7c4b2', motif: 'conifer', label: 'Taiga' },
+  [REGION.ironback]: { color: '#5c5a58', paper: '#d0c5b3', motif: 'peak', label: 'Alpine' },
+  [REGION.greatwood]: { color: '#3d5a3a', paper: '#b4c69a', motif: 'forest', label: 'Temperate forest' },
+  [REGION.hollowKarst]: { color: '#77705c', paper: '#e0d8be', motif: 'karst', label: 'Limestone karst' },
+  [REGION.ascentBasin]: { color: '#6f7845', paper: '#d9d9a6', motif: 'grass', label: 'River grassland' },
+  [REGION.anvilShelf]: { color: '#6a6a5a', paper: '#cbc6ac', motif: 'scrub', label: 'Windswept highland' },
+  [REGION.meridianCoast]: { color: '#7e8b47', paper: '#cfd694', motif: 'olive', label: 'Mediterranean' },
+  [REGION.ashenSteppe]: { color: '#8a7d55', paper: '#dfd09e', motif: 'scrub', label: 'Dry steppe' },
+  [REGION.cinderWaste]: { color: '#9c7a4d', paper: '#e4c892', motif: 'dune', label: 'Desert' },
+  [REGION.whitePans]: { color: '#b6ab8c', paper: '#f1edda', motif: 'salt', label: 'Salt pan' },
+  [REGION.theDrown]: { color: '#4a5c48', paper: '#aac4a2', motif: 'marsh', label: 'Delta marsh' },
+  [REGION.mistfallCoast]: { color: '#54666b', paper: '#c0cbc3', motif: 'conifer', label: 'Cold coast' },
+  [REGION.aethericScar]: { color: '#5a5170', paper: '#d0bfc7', motif: 'ash', label: 'Anomaly' },
+  [REGION.meridianGulf]: { color: '#2e4a5a', paper: '#aebfbd', motif: 'none', label: 'Warm sea' },
+  [REGION.easternDeep]: { color: '#233b4a', paper: '#a3b5b6', motif: 'none', label: 'Ocean' },
 }
 
 /** Sea labels are placed by hand; the water is everything outside `LAND`. */

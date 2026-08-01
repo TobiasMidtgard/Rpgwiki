@@ -1107,7 +1107,7 @@ a.card:hover {
 }
 
 .layer-list {
-  max-height: min(52vh, 460px);
+  max-height: min(62vh, 560px);
   overflow-y: auto;
   padding: var(--sp-2) var(--sp-3);
 }
@@ -1260,7 +1260,7 @@ a.card:hover {
   background: var(--s1);
 }
 .entity-hero {
-  height: 260px;
+  height: 300px;
   position: relative;
   overflow: hidden;
   border-bottom: 1px solid var(--line);

@@ -139,7 +139,7 @@ export default function EntityPage() {
           {entity.type === 'city' ? (
             <CityVista id={entity.id} palette={palette} title={`${entity.name} — generated vista`} />
           ) : (
-            <TypeBanner type={entity.type} id={entity.id} height={260} />
+            <TypeBanner type={entity.type} id={entity.id} height={300} />
           )}
           <div className="entity-hero-veil" />
           <div className="entity-hero-text">

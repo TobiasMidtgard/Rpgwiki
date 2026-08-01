@@ -25,3 +25,4 @@ dist-ssr
 .manifest.md
 .place-ids.txt
 .verify/
+.shots/
