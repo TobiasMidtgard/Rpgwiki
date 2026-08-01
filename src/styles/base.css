@@ -1072,8 +1072,8 @@ a.card:hover {
 }
 .map-stage svg {
   display: block;
-  width: 100%;
-  height: 100%;
+  /* Size and position come from the component: the chart is drawn larger than
+     the stage so a pan can slide it without repainting. */
   user-select: none;
 }
 

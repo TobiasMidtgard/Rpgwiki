@@ -10,6 +10,8 @@
     "lint": "oxlint",
     "validate": "tsx scripts/validate-seed.ts",
     "verify": "node scripts/verify.mjs",
+    "verify:pan": "node scripts/pansmooth.mjs && node scripts/pansoak.mjs",
+    "bench:pan": "node scripts/panframes.mjs",
     "check": "tsc -b && oxlint && tsx scripts/validate-seed.ts"
   },
   "dependencies": {

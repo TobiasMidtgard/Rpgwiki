@@ -10,7 +10,8 @@
  * with the world.
  */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { MapLayerId, Point, RegionShape, RouteShape, ZoneShape } from '../core/types'
 import { WORLD_H, WORLD_W } from '../core/types'
 import { useWorld } from '../core/store'
@@ -52,6 +53,20 @@ export const MAP_LAYERS: LayerDef[] = [
    the world is still loading. */
 /** The water plane. Sized to cover any viewBox the fit logic can produce. */
 const SEA = { x: -WORLD_W * 2, y: -WORLD_H * 3, w: WORLD_W * 5, h: WORLD_H * 7 }
+
+/**
+ * How much chart is drawn beyond each edge of the stage, as a fraction of the
+ * stage. A pan slides the already-rendered SVG with a compositor transform; the
+ * overscan is the budget of pre-drawn map available before a repaint is needed.
+ */
+const OVERSCAN = 0.3
+
+/**
+ * Area covered by the sea hatching. The flat sea colour can span the whole
+ * plane cheaply, but a tiled pattern cannot: this is bounded to what panning
+ * can actually bring on screen.
+ */
+const HATCH = { x: -WORLD_W * 0.6, y: -WORLD_H * 0.6, w: WORLD_W * 2.2, h: WORLD_H * 2.2 }
 
 const EMPTY_REGIONS: RegionShape[] = []
 const EMPTY_ROUTES: RouteShape[] = []
@@ -243,28 +258,92 @@ export function WorldMap({
   const dimmed = useCallback((id: string) => !!highlight && !highlight.has(id), [highlight])
 
   /* --- interaction ------------------------------------------------ */
-  const toWorld = useCallback(
-    (clientX: number, clientY: number): Point => {
-      const rect = stage.current?.getBoundingClientRect()
-      if (!rect) return [0, 0]
-      return [view.x + ((clientX - rect.left) / rect.width) * view.w, view.y + ((clientY - rect.top) / rect.height) * view.h]
+
+  /**
+   * The live view, mirrored outside React state.
+   *
+   * Changing the viewBox repaints the entire chart, which measured about 40ms a
+   * frame regardless of CPU speed — it is rasterisation, not script. So a pan
+   * does not touch the viewBox at all: the SVG is drawn larger than the stage
+   * (see OVERSCAN) and slid with a CSS transform, which the compositor can do
+   * without repainting. The viewBox is only rewritten when the gesture ends, or
+   * when the slide has used up the overscan and fresh chart has to be drawn.
+   */
+  const viewRef = useRef(view)
+  const commitFrame = useRef<number | null>(null)
+  /** Live pan offset in CSS pixels, applied as a transform. */
+  const slide = useRef({ x: 0, y: 0 })
+
+  const setSlide = useCallback((x: number, y: number) => {
+    slide.current = { x, y }
+    const el = svgRef.current
+    if (el) el.style.transform = x === 0 && y === 0 ? '' : `translate3d(${x}px, ${y}px, 0)`
+  }, [])
+
+  const applyView = useCallback((next: { x: number; y: number; w: number; h: number }, commit: boolean) => {
+    const v = clampView(next)
+    viewRef.current = v
+    if (!commit) return
+    if (commitFrame.current !== null) return
+    commitFrame.current = requestAnimationFrame(() => {
+      commitFrame.current = null
+      setView(viewRef.current)
+    })
+  }, [])
+
+  /**
+   * Redraw at the new view *now*, in this task. Handing the slide back to the
+   * viewBox is only seamless if the transform is cleared and the viewBox moved
+   * in the same paint — scheduled apart, the chart snaps back to where the drag
+   * started for a frame. Used mid-drag, where that flash would land on every
+   * hand-over and read as the map tearing itself apart.
+   */
+  const commitViewNow = useCallback((next: { x: number; y: number; w: number; h: number }) => {
+    const v = clampView(next)
+    viewRef.current = v
+    if (commitFrame.current !== null) {
+      cancelAnimationFrame(commitFrame.current)
+      commitFrame.current = null
+    }
+    flushSync(() => setView(v))
+  }, [])
+
+  // Keep the mirror in step when the view changes through React (fit, resize,
+  // selection recentring), and drop any leftover slide now that the viewBox
+  // itself has moved. Layout effect so the two never disagree on screen.
+  useLayoutEffect(() => {
+    viewRef.current = view
+    if (slide.current.x !== 0 || slide.current.y !== 0) setSlide(0, 0)
+  }, [view, setSlide])
+
+  useEffect(
+    () => () => {
+      if (commitFrame.current !== null) cancelAnimationFrame(commitFrame.current)
     },
-    [view],
+    [],
   )
+
+  const toWorld = useCallback((clientX: number, clientY: number): Point => {
+    const rect = stage.current?.getBoundingClientRect()
+    if (!rect) return [0, 0]
+    const v = viewRef.current
+    return [v.x + ((clientX - rect.left) / rect.width) * v.w, v.y + ((clientY - rect.top) / rect.height) * v.h]
+  }, [])
 
   const zoomBy = useCallback(
     (factor: number, anchor?: Point) => {
-      setView((v) => {
-        const nw = Math.max(WORLD_W / 14, Math.min(WORLD_W * 1.25, v.w * factor))
-        const nh = nw * (v.h / v.w)
-        const ax = anchor ? anchor[0] : v.x + v.w / 2
-        const ay = anchor ? anchor[1] : v.y + v.h / 2
-        const tx = (ax - v.x) / v.w
-        const ty = (ay - v.y) / v.h
-        return clampView({ x: ax - nw * tx, y: ay - nh * ty, w: nw, h: nh })
-      })
+      const v = viewRef.current
+      const nw = Math.max(WORLD_W / 14, Math.min(WORLD_W * 1.25, v.w * factor))
+      const nh = nw * (v.h / v.w)
+      const ax = anchor ? anchor[0] : v.x + v.w / 2
+      const ay = anchor ? anchor[1] : v.y + v.h / 2
+      const tx = (ax - v.x) / v.w
+      const ty = (ay - v.y) / v.h
+      // Zoom changes marker and label scale, so it has to reach state — but
+      // coalesced to one commit per frame rather than one per wheel tick.
+      applyView({ x: ax - nw * tx, y: ay - nh * ty, w: nw, h: nh }, true)
     },
-    [],
+    [applyView],
   )
 
   useEffect(() => {
@@ -273,6 +352,9 @@ export function WorldMap({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       zoomBy(e.deltaY > 0 ? 1.14 : 1 / 1.14, toWorld(e.clientX, e.clientY))
+      // Zooming mid-drag moves the view out from under the slide; re-anchor the
+      // gesture to here so the next move is measured against the new view.
+      if (pan.current) pan.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
@@ -340,7 +422,7 @@ export function WorldMap({
       return
     }
     if (e.button !== 0 && e.button !== 1) return
-    pan.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }
+    pan.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y }
     setDragging(true)
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
@@ -355,9 +437,34 @@ export function WorldMap({
     if (!pan.current) return
     const rect = stage.current?.getBoundingClientRect()
     if (!rect) return
-    const dx = ((e.clientX - pan.current.x) / rect.width) * view.w
-    const dy = ((e.clientY - pan.current.y) / rect.height) * view.h
-    setView((v) => clampView({ ...v, x: pan.current!.vx - dx, y: pan.current!.vy - dy }))
+
+    // The slide has to obey exactly the same limits as the view it stands in
+    // for. Sliding freely and clamping only on hand-over lets the chart travel
+    // somewhere it cannot stay, then snaps it back — which is what panning at
+    // full zoom, where the view can barely move at all, looked like.
+    const v = viewRef.current
+    const rawX = e.clientX - pan.current.x
+    const rawY = e.clientY - pan.current.y
+    const target = clampView({
+      ...v,
+      x: v.x - (rawX / rect.width) * v.w,
+      y: v.y - (rawY / rect.height) * v.h,
+    })
+    const px = ((v.x - target.x) / v.w) * rect.width
+    const py = ((v.y - target.y) / v.h) * rect.height
+
+    // Slid far enough that we are about to run off the pre-drawn edge: fold the
+    // slide into the view, repaint once, and start sliding again from there.
+    const budgetX = rect.width * OVERSCAN * 0.85
+    const budgetY = rect.height * OVERSCAN * 0.85
+    if (Math.abs(px) > budgetX || Math.abs(py) > budgetY) {
+      // Synchronous: the layout effect drops the slide as part of the same
+      // commit, so the chart never shows the old viewBox without its transform.
+      commitViewNow(target)
+      pan.current = { x: e.clientX, y: e.clientY, vx: target.x, vy: target.y }
+      return
+    }
+    setSlide(px, py)
   }
 
   const endPointer = (e: React.PointerEvent) => {
@@ -375,6 +482,18 @@ export function WorldMap({
     if (p && !drag?.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6) {
       onSelect?.(p.id)
     }
+    if (pan.current) {
+      const rect = stage.current?.getBoundingClientRect()
+      const v = viewRef.current
+      if (rect && (slide.current.x !== 0 || slide.current.y !== 0)) {
+        applyView(
+          { ...v, x: v.x - (slide.current.x / rect.width) * v.w, y: v.y - (slide.current.y / rect.height) * v.h },
+          true,
+        )
+      }
+    } else if (pinch.current) {
+      applyView(viewRef.current, true)
+    }
     press.current = null
     pan.current = null
     pinch.current = null
@@ -384,7 +503,7 @@ export function WorldMap({
   const onTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
-      pinch.current = { d, w: view.w }
+      pinch.current = { d, w: viewRef.current.w }
     }
   }
   const onTouchMove = (e: React.TouchEvent) => {
@@ -394,27 +513,26 @@ export function WorldMap({
       const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2
       const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2
       const anchor = toWorld(cx, cy)
-      setView((v) => {
-        const nw = Math.max(WORLD_W / 14, Math.min(WORLD_W * 1.25, pinch.current!.w * factor))
-        const nh = nw * (v.h / v.w)
-        const tx = (anchor[0] - v.x) / v.w
-        const ty = (anchor[1] - v.y) / v.h
-        return clampView({ x: anchor[0] - nw * tx, y: anchor[1] - nh * ty, w: nw, h: nh })
-      })
+      const v = viewRef.current
+      const nw = Math.max(WORLD_W / 14, Math.min(WORLD_W * 1.25, pinch.current.w * factor))
+      const nh = nw * (v.h / v.w)
+      const tx = (anchor[0] - v.x) / v.w
+      const ty = (anchor[1] - v.y) / v.h
+      applyView({ x: anchor[0] - nw * tx, y: anchor[1] - nh * ty, w: nw, h: nh }, true)
     }
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const stepPx = e.shiftKey ? 0.24 : 0.08
     const map: Record<string, () => void> = {
-      ArrowLeft: () => setView((v) => clampView({ ...v, x: v.x - v.w * stepPx })),
-      ArrowRight: () => setView((v) => clampView({ ...v, x: v.x + v.w * stepPx })),
-      ArrowUp: () => setView((v) => clampView({ ...v, y: v.y - v.h * stepPx })),
-      ArrowDown: () => setView((v) => clampView({ ...v, y: v.y + v.h * stepPx })),
+      ArrowLeft: () => applyView({ ...viewRef.current, x: viewRef.current.x - viewRef.current.w * stepPx }, true),
+      ArrowRight: () => applyView({ ...viewRef.current, x: viewRef.current.x + viewRef.current.w * stepPx }, true),
+      ArrowUp: () => applyView({ ...viewRef.current, y: viewRef.current.y - viewRef.current.h * stepPx }, true),
+      ArrowDown: () => applyView({ ...viewRef.current, y: viewRef.current.y + viewRef.current.h * stepPx }, true),
       '+': () => zoomBy(1 / 1.25),
       '=': () => zoomBy(1 / 1.25),
       '-': () => zoomBy(1.25),
-      '0': () => setView({ x: 0, y: 0, w: WORLD_W, h: WORLD_H }),
+      '0': () => applyView({ x: 0, y: 0, w: WORLD_W, h: WORLD_H }, true),
     }
     const fn = map[e.key]
     if (fn) {
@@ -437,9 +555,213 @@ export function WorldMap({
   // World units per CSS pixel. Marker glyphs and labels are sized in real
   // screen pixels, so they stay legible at any zoom and at any panel size.
   const px = size.w > 0 ? view.w / size.w : view.w / WORLD_W
+
+  /**
+   * The drawn box: the view plus an overscan margin on every side, at exactly
+   * the same scale. The element is inset by the same fraction, so what lands
+   * over the stage is precisely `view` and everything else is the slide budget.
+   */
+  const over = preview ? 0 : OVERSCAN
+  const vb = {
+    x: view.x - view.w * over,
+    y: view.y - view.h * over,
+    w: view.w * (1 + 2 * over),
+    h: view.h * (1 + 2 * over),
+  }
+  const inset = `${-over * 100}%`
+  const span = `${(1 + 2 * over) * 100}%`
   const s = (n: number) => n * px
   /** Show a label only once the view is zoomed in past `maxPx` world-units-per-pixel. */
   const showLabel = (maxPx: number) => px <= maxPx
+
+  /**
+   * The coast, biomes, relief, political shading, borders, rivers and routes:
+   * over a thousand nodes that depend on the data and the layer switches, and
+   * on nothing about the current view. Memoising the subtree means React
+   * reuses the exact same elements when the view commits, instead of
+   * reconciling the whole map.
+   */
+  const staticScene = useMemo(
+    () => (
+      <>
+          {/* Sea ------------------------------------------------------ */}
+          <rect x={SEA.x} y={SEA.y} width={SEA.w} height={SEA.h} fill={paper ? '#aebfbd' : '#16232c'} />
+          {paper ? (
+            <rect
+              x={HATCH.x}
+              y={HATCH.y}
+              width={HATCH.w}
+              height={HATCH.h}
+              fill={`url(#sealines-${uid})`}
+              opacity={0.5}
+            />
+          ) : null}
+
+          {/* Coastal shading. The wide strokes straddle the coast; the land fill
+              is painted next and hides the half that falls inland, which avoids
+              clipping every frame against the coastline. */}
+          <g>
+            {[30, 20, 11, 5].map((w, i) => (
+              <path
+                key={w}
+                d={landPath}
+                fill="none"
+                stroke={paper ? '#8fa39f' : '#20323d'}
+                strokeWidth={w}
+                opacity={paper ? 0.16 + i * 0.1 : 0.24 + i * 0.13}
+              />
+            ))}
+          </g>
+
+          {/* Land ----------------------------------------------------- */}
+          <path d={landPath} fill={paper ? '#e4d8b8' : '#2c3128'} />
+
+          <g>
+            {/* Biome fills */}
+            {layers.has('biomes')
+              ? regionPaths.map((r) => {
+                  const p = BIOME_PAINT[r.id]
+                  if (!p) return null
+                  return <path key={`b-${r.key}`} d={r.d} fill={paper ? p.paper : p.color} opacity={paper ? 0.94 : 0.95} />
+                })
+              : null}
+
+            {/* Relief motifs */}
+            {layers.has('relief') ? (
+              <g stroke={paper ? '#7a6642' : '#cdd3c4'} strokeWidth={1.3} fill="none" opacity={paper ? 0.55 : 0.28} strokeLinecap="round">
+                {motifs.map((m) => (
+                  <path key={m.key} d={m.d} />
+                ))}
+              </g>
+            ) : null}
+
+            {/* Political influence. Circles around cities, so these are the one
+                thing here that genuinely spills past the coast. */}
+            {layers.has('political') ? (
+              <g clipPath={`url(#land-${uid})`}>
+                {infl.map((i) => (
+                  <circle key={`i-${i.cityId}`} cx={i.at[0]} cy={i.at[1]} r={i.r} fill={i.color} opacity={paper ? 0.17 : 0.22} />
+                ))}
+              </g>
+            ) : null}
+
+            {/* Faction territory */}
+            {terr.map((t) => (
+              <g key={`t-${t.factionId}`} opacity={paper ? 0.3 : 0.36}>
+                {t.hull.length >= 3 ? (
+                  <path d={polygonToPath(t.hull)} fill={t.color} opacity={0.36} stroke={t.color} strokeWidth={2.4} strokeDasharray={t.contested ? '10 7' : undefined} />
+                ) : null}
+                {t.discs.map((d, i) => (
+                  <circle key={i} cx={d.at[0]} cy={d.at[1]} r={d.r} fill={t.color} opacity={0.3} />
+                ))}
+              </g>
+            ))}
+
+            {/* Conflict zones */}
+            {layers.has('conflict')
+              ? zonePaths.map((z) => {
+                  const color = z.kind === 'war' ? '#a3372f' : z.kind === 'disputed' ? '#c9962f' : '#8a5a3a'
+                  return (
+                    <g key={z.id}>
+                      <path d={z.d} fill={`url(#hatch-${uid})`} opacity={0.75} />
+                      <path d={z.d} fill={color} opacity={paper ? 0.15 : 0.2} stroke={color} strokeWidth={2} strokeDasharray="9 6" />
+                    </g>
+                  )
+                })
+              : null}
+
+            {/* Region borders */}
+            {layers.has('regions')
+              ? regionPaths.map((r) => (
+                  <path
+                    key={`r-${r.key}`}
+                    d={r.d}
+                    fill="none"
+                    stroke={paper ? '#7d6842' : '#8f9aa4'}
+                    strokeWidth={2}
+                    strokeDasharray="7 5"
+                    opacity={0.85}
+                  />
+                ))
+              : null}
+
+            {/* Rivers */}
+            {layers.has('rivers')
+              ? routePaths
+                  .filter((r) => r.kind === 'river')
+                  .map((r) => (
+                    <path
+                      key={r.id}
+                      d={r.d}
+                      fill="none"
+                      stroke={paper ? '#6d8296' : '#5d93ad'}
+                      strokeWidth={(r.weight ?? 1) * 1.7}
+                      strokeLinecap="round"
+                      opacity={0.9}
+                    />
+                  ))
+              : null}
+          </g>
+
+          {/* The inked coastline, over the biome fills. */}
+          <path
+            d={landPath}
+            fill="none"
+            stroke={paper ? '#5f5334' : '#0c1116'}
+            strokeWidth={paper ? 2.6 : 2.2}
+            opacity={paper ? 0.75 : 0.85}
+            pointerEvents="none"
+          />
+
+          {/* Routes (drawn over the coast so they can reach harbours) --- */}
+          {layers.has('sea')
+            ? routePaths
+                .filter((r) => r.kind === 'sea')
+                .map((r) => (
+                  <path key={r.id} d={r.d} fill="none" stroke={paper ? '#6b7f92' : '#7fa5bd'} strokeWidth={1.8} strokeDasharray="2 8" strokeLinecap="round" opacity={0.85} />
+                ))
+            : null}
+
+          {layers.has('roads')
+            ? routePaths
+                .filter((r) => r.kind === 'road')
+                .map((r) => (
+                  <g key={r.id}>
+                    <path d={r.d} fill="none" stroke={paper ? '#b9a77e' : '#0f1114'} strokeWidth={(r.weight ?? 2) * 1.9} strokeLinecap="round" opacity={0.55} />
+                    <path d={r.d} fill="none" stroke={paper ? '#6b5c42' : '#b09a76'} strokeWidth={(r.weight ?? 2) * 0.7} strokeLinecap="round" strokeDasharray="12 7" />
+                  </g>
+                ))
+            : null}
+
+          {layers.has('trade')
+            ? routePaths
+                .filter((r) => r.kind === 'trade')
+                .map((r) => (
+                  <path key={r.id} d={r.d} fill="none" stroke="#c9962f" strokeWidth={(r.weight ?? 2) * 1.15} strokeLinecap="round" opacity={0.9} />
+                ))
+            : null}
+
+          {layers.has('smuggling')
+            ? routePaths
+                .filter((r) => r.kind === 'smuggling')
+                .map((r) => (
+                  <path
+                    key={r.id}
+                    d={r.d}
+                    fill="none"
+                    stroke="#8f77b8"
+                    strokeWidth={(r.weight ?? 1.5) * 1.2}
+                    strokeLinecap="round"
+                    strokeDasharray="3 7"
+                    opacity={0.95}
+                  />
+                ))
+            : null}
+
+      </>
+    ),
+    [paper, uid, landPath, regionPaths, motifs, layers, infl, terr, zonePaths, routePaths],
+  )
 
   if (!world) return null
 
@@ -457,7 +779,8 @@ export function WorldMap({
     >
       <svg
         ref={svgRef}
-        viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+        style={{ position: 'absolute', left: inset, top: inset, width: span, height: span, willChange: 'transform' }}
         preserveAspectRatio="xMidYMid slice"
         onKeyDown={onKeyDown}
         tabIndex={preview ? -1 : 0}
@@ -478,190 +801,18 @@ export function WorldMap({
           <clipPath id={`land-${uid}`}>
             <path d={landPath} />
           </clipPath>
-          {/* Sea = everything outside the land ring; used for coastal shading. */}
-          <clipPath id={`sea-${uid}`} clipRule="evenodd">
-            <path d={`M${SEA.x},${SEA.y} H${SEA.x + SEA.w} V${SEA.y + SEA.h} H${SEA.x} Z ${landPath}`} clipRule="evenodd" />
-          </clipPath>
           <pattern id={`hatch-${uid}`} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="7" stroke={paper ? '#8a7550' : '#7d8b96'} strokeWidth="1.1" opacity="0.5" />
+          </pattern>
+          <pattern id={`sealines-${uid}`} width="40" height="40" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0.5" x2="40" y2="0.5" stroke="#93a8a6" strokeWidth="0.8" opacity="0.55" />
           </pattern>
           <pattern id={`dots-${uid}`} width="9" height="9" patternUnits="userSpaceOnUse">
             <circle cx="2" cy="2" r="1.1" fill={paper ? '#8a7550' : '#9aa3ad'} opacity="0.55" />
           </pattern>
         </defs>
 
-        {/* Sea ------------------------------------------------------ */}
-        <rect x={SEA.x} y={SEA.y} width={SEA.w} height={SEA.h} fill={paper ? '#aebfbd' : '#16232c'} />
-        {paper ? (
-          <g clipPath={`url(#sea-${uid})`} opacity={0.5}>
-            {Array.from({ length: 160 }, (_, i) => (
-              <path
-                key={i}
-                d={`M${SEA.x},${SEA.y + 40 + i * 40} H${SEA.x + SEA.w}`}
-                stroke="#93a8a6"
-                strokeWidth={0.8}
-                fill="none"
-                opacity={0.55}
-              />
-            ))}
-          </g>
-        ) : null}
-
-        {/* Coastal shading: wide strokes on the coast, clipped to the sea */}
-        <g clipPath={`url(#sea-${uid})`}>
-          {[30, 20, 11, 5].map((w, i) => (
-            <path
-              key={w}
-              d={landPath}
-              fill="none"
-              stroke={paper ? '#8fa39f' : '#20323d'}
-              strokeWidth={w}
-              opacity={paper ? 0.16 + i * 0.1 : 0.24 + i * 0.13}
-            />
-          ))}
-        </g>
-
-        {/* Land ----------------------------------------------------- */}
-        <path d={landPath} fill={paper ? '#e4d8b8' : '#2c3128'} />
-
-        <g clipPath={`url(#land-${uid})`}>
-          {/* Biome fills */}
-          {layers.has('biomes')
-            ? regionPaths.map((r) => {
-                const p = BIOME_PAINT[r.id]
-                if (!p) return null
-                return <path key={`b-${r.key}`} d={r.d} fill={paper ? p.paper : p.color} opacity={paper ? 0.94 : 0.95} />
-              })
-            : null}
-
-          {/* Relief motifs */}
-          {layers.has('relief') ? (
-            <g stroke={paper ? '#7a6642' : '#cdd3c4'} strokeWidth={1.3} fill="none" opacity={paper ? 0.55 : 0.28} strokeLinecap="round">
-              {motifs.map((m) => (
-                <path key={m.key} d={m.d} />
-              ))}
-            </g>
-          ) : null}
-
-          {/* Political influence */}
-          {layers.has('political')
-            ? infl.map((i) => (
-                <circle key={`i-${i.cityId}`} cx={i.at[0]} cy={i.at[1]} r={i.r} fill={i.color} opacity={paper ? 0.17 : 0.22} />
-              ))
-            : null}
-
-          {/* Faction territory */}
-          {terr.map((t) => (
-            <g key={`t-${t.factionId}`} opacity={paper ? 0.3 : 0.36}>
-              {t.hull.length >= 3 ? (
-                <path d={polygonToPath(t.hull)} fill={t.color} opacity={0.36} stroke={t.color} strokeWidth={2.4} strokeDasharray={t.contested ? '10 7' : undefined} />
-              ) : null}
-              {t.discs.map((d, i) => (
-                <circle key={i} cx={d.at[0]} cy={d.at[1]} r={d.r} fill={t.color} opacity={0.3} />
-              ))}
-            </g>
-          ))}
-
-          {/* Conflict zones */}
-          {layers.has('conflict')
-            ? zonePaths.map((z) => {
-                const color = z.kind === 'war' ? '#a3372f' : z.kind === 'disputed' ? '#c9962f' : '#8a5a3a'
-                return (
-                  <g key={z.id}>
-                    <path d={z.d} fill={`url(#hatch-${uid})`} opacity={0.75} />
-                    <path d={z.d} fill={color} opacity={paper ? 0.15 : 0.2} stroke={color} strokeWidth={2} strokeDasharray="9 6" />
-                  </g>
-                )
-              })
-            : null}
-
-          {/* Region borders */}
-          {layers.has('regions')
-            ? regionPaths.map((r) => (
-                <path
-                  key={`r-${r.key}`}
-                  d={r.d}
-                  fill="none"
-                  stroke={paper ? '#7d6842' : '#8f9aa4'}
-                  strokeWidth={2}
-                  strokeDasharray="7 5"
-                  opacity={0.85}
-                />
-              ))
-            : null}
-
-          {/* Rivers */}
-          {layers.has('rivers')
-            ? routePaths
-                .filter((r) => r.kind === 'river')
-                .map((r) => (
-                  <path
-                    key={r.id}
-                    d={r.d}
-                    fill="none"
-                    stroke={paper ? '#6d8296' : '#5d93ad'}
-                    strokeWidth={(r.weight ?? 1) * 1.7}
-                    strokeLinecap="round"
-                    opacity={0.9}
-                  />
-                ))
-            : null}
-        </g>
-
-        {/* The inked coastline, over the biome fills. */}
-        <path
-          d={landPath}
-          fill="none"
-          stroke={paper ? '#5f5334' : '#0c1116'}
-          strokeWidth={paper ? 2.6 : 2.2}
-          opacity={paper ? 0.75 : 0.85}
-          pointerEvents="none"
-        />
-
-        {/* Routes (drawn over the coast so they can reach harbours) --- */}
-        {layers.has('sea')
-          ? routePaths
-              .filter((r) => r.kind === 'sea')
-              .map((r) => (
-                <path key={r.id} d={r.d} fill="none" stroke={paper ? '#6b7f92' : '#7fa5bd'} strokeWidth={1.8} strokeDasharray="2 8" strokeLinecap="round" opacity={0.85} />
-              ))
-          : null}
-
-        {layers.has('roads')
-          ? routePaths
-              .filter((r) => r.kind === 'road')
-              .map((r) => (
-                <g key={r.id}>
-                  <path d={r.d} fill="none" stroke={paper ? '#b9a77e' : '#0f1114'} strokeWidth={(r.weight ?? 2) * 1.9} strokeLinecap="round" opacity={0.55} />
-                  <path d={r.d} fill="none" stroke={paper ? '#6b5c42' : '#b09a76'} strokeWidth={(r.weight ?? 2) * 0.7} strokeLinecap="round" strokeDasharray="12 7" />
-                </g>
-              ))
-          : null}
-
-        {layers.has('trade')
-          ? routePaths
-              .filter((r) => r.kind === 'trade')
-              .map((r) => (
-                <path key={r.id} d={r.d} fill="none" stroke="#c9962f" strokeWidth={(r.weight ?? 2) * 1.15} strokeLinecap="round" opacity={0.9} />
-              ))
-          : null}
-
-        {layers.has('smuggling')
-          ? routePaths
-              .filter((r) => r.kind === 'smuggling')
-              .map((r) => (
-                <path
-                  key={r.id}
-                  d={r.d}
-                  fill="none"
-                  stroke="#8f77b8"
-                  strokeWidth={(r.weight ?? 1.5) * 1.2}
-                  strokeLinecap="round"
-                  strokeDasharray="3 7"
-                  opacity={0.95}
-                />
-              ))
-          : null}
+        {staticScene}
 
         {/* Deposits -------------------------------------------------- */}
         {layers.has('deposits')
