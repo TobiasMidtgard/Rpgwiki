@@ -20,13 +20,15 @@ import {
   revertToRevision,
   useWorld,
 } from '../core/store'
-import { buildIndex, sourcesOf, targetsOf } from '../core/relations'
+import { buildIndex, targetsOf } from '../core/relations'
 import { setEditing, setShowSecrets, useUiState } from '../core/uiState'
 import { entityToMarkdown, download } from '../core/io'
 import { CityVista } from '../art/vista'
 import { TypeBanner } from '../art/banner'
+import { CITY_ROSTERS } from '../core/roster'
 import { Backlinks } from '../components/Backlinks'
 import { CityPlan } from '../components/CityPlan'
+import { Roster } from '../components/Roster'
 import { EntityChip, entityPath } from '../components/EntityLink'
 import { FieldRow, FieldValueView, isEmptyValue } from '../components/FieldView'
 import { CustomFieldsEditor, FieldEditor, IdentityEditor } from '../components/EntityEditor'
@@ -45,10 +47,16 @@ export default function EntityPage() {
   const world = useWorld()
   const nav = useNavigate()
   const ui = useUiState()
-  const [tab, setTab] = useState<string | null>(null)
+  // Which tab is open, tied to the entry it was chosen on. Routing between two
+  // entries of the same type re-renders this component rather than remounting
+  // it, so a plain piece of state would carry the previous entry's tab over and
+  // land the reader on Play when they clicked through to a city's Overview.
+  const [chosenTab, setChosenTab] = useState<{ forId: string; key: string } | null>(null)
   const [showRevisions, setShowRevisions] = useState(false)
 
   const decoded = id ? decodeURIComponent(id) : ''
+  const tab = chosenTab && chosenTab.forId === decoded ? chosenTab.key : null
+  const setTab = (key: string) => setChosenTab({ forId: decoded, key })
   const entity = world?.entities[decoded]
   const index = useMemo(() => (world ? buildIndex(world) : null), [world])
 
@@ -457,6 +465,13 @@ function RelatedList({ ids, empty }: { ids: string[]; empty: string }) {
 }
 
 /**
+ * City sections that carry their own fields as well as a roster. A roster that
+ * matches nothing there would be an empty box under prose that is already
+ * saying something, so it stays silent instead.
+ */
+const ROSTER_QUIET_WHEN_EMPTY = new Set(['location', 'infrastructure', 'population', 'sustenance', 'resources'])
+
+/**
  * Injects computed content into the section it belongs in. Everything here is
  * derived from relations, so it stays correct when links change.
  */
@@ -465,54 +480,43 @@ function AutoSection({ entity, group }: { entity: Entity; group: string }): Reac
   const index = useMemo(() => (world ? buildIndex(world) : null), [world])
   if (!world || !index) return null
 
-  const contained = (type: EntityType) => targetsOf(index, entity.id, 'contains').filter((id) => world.entities[id]?.type === type)
   const inboundOfType = (type: EntityType) =>
     [...new Set((index.in[entity.id] ?? []).map((e) => e.from))].filter((id) => world.entities[id]?.type === type)
 
   const key = `${entity.type}:${group}`
 
-  switch (key) {
-    case 'city:citymap':
+  // A city's sections are browsable rosters rather than lists of bare names:
+  // every entry that links here, filed under a readable category, with its
+  // emblem and its own summary line. Sections that carry prose of their own
+  // stay quiet when nothing qualifies; the ones the roster *is* say so.
+  if (entity.type === 'city') {
+    const cats = CITY_ROSTERS[group]
+    if (cats) {
+      const roster = (
+        <Roster
+          hostId={entity.id}
+          categories={cats}
+          scope={`city:${group}`}
+          hideWhenEmpty={ROSTER_QUIET_WHEN_EMPTY.has(group)}
+        />
+      )
+      if (group !== 'citymap') return roster
       return (
         <>
           <CityPlan cityId={entity.id} plan={entity.fields.cityMap} />
-          <div style={{ marginTop: 'var(--sp-3)' }}>
-            <div className="label" style={{ marginBottom: 4 }}>
-              District entries
-            </div>
-            <RelatedList ids={contained('district')} empty="No districts linked to this city yet." />
-          </div>
+          <div style={{ marginTop: 'var(--sp-3)' }}>{roster}</div>
         </>
       )
+    }
+  }
 
-    case 'city:landmark':
-      return <RelatedList ids={contained('landmark')} empty="No landmark entry linked yet." />
-
-    case 'city:factions':
-      return (
-        <RelatedList
-          ids={[...new Set([...sourcesOf(index, entity.id, 'controls'), ...sourcesOf(index, entity.id, 'contests'), ...inboundOfType('faction')])]}
-          empty="No factions are linked to this city yet."
-        />
-      )
-
-    case 'city:npcs':
+  switch (key) {
     case 'faction:people':
       return <RelatedList ids={inboundOfType('npc')} empty="No NPCs are linked here yet." />
 
-    case 'city:quests':
     case 'faction:quests':
     case 'npc:quests':
       return <RelatedList ids={inboundOfType('quest')} empty="No quests are linked here yet." />
-
-    case 'city:creatures':
-      return <RelatedList ids={inboundOfType('creature')} empty="No creatures are linked to this city yet." />
-
-    case 'city:mechanics':
-      return <RelatedList ids={inboundOfType('mechanic')} empty="No mechanic entry is linked yet." />
-
-    case 'city:services':
-      return <RelatedList ids={inboundOfType('item')} empty="No items are linked to this city yet." />
 
     case 'faction:territory':
       return (

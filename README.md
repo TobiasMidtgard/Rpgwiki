@@ -142,6 +142,29 @@ changing `WorldMap`:
 `npm run verify:pan` guards both: it asserts a dragged marker tracks the pointer with no backwards
 step, and that a sustained drag leaks neither heap nor DOM nodes.
 
+### City sections are rosters
+
+Most sections of a city page list the entries that link to it as a collapsible
+category — districts, landmarks, people, fauna, flora, minerals, worked materials,
+machines, factions, quests, items, cultures. Closed, a category shows its count and a
+strip of tiles; open, every entry is a card with its emblem, its classification and its
+own summary line, and the card is the link.
+
+Categories never assert anything new. Membership is entry type plus the classifying
+field that type's schema already defines, so Flora is `food` classified Crop/Forage/Fungus
+plus `material` classified Biological, and Minerals is `deposit` plus `material` classified
+Natural. A material with a source creature is a creature product, not a plant. Add a
+category by adding a row to `CITY_ROSTERS` in `src/core/roster.ts`; nothing else changes.
+
+Entries inherited from the city's region — characteristic wildlife, regional deposits —
+are included but marked *via <region>*, because "lives in this biome" is a weaker claim
+than "lives in this city" and the page should not blur the two.
+
+Tile emblems follow the classification rather than the bare type (`motifFor` in
+`src/art/thumb.tsx`): timber draws as a plant, ore as crystal, cast bronze as billets.
+Drawing all three as the same crystal was the first version and it made the roster a
+wall of identical tiles.
+
 ### Persistence
 
 IndexedDB, with a localStorage fallback for browsers that block it. Saves half a second after each

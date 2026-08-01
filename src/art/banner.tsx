@@ -9,7 +9,7 @@
 import { useId } from 'react'
 import type { EntityType } from '../core/types'
 
-const ACCENT: Record<EntityType, string> = {
+export const ACCENT: Record<EntityType, string> = {
   region: '#6f8f6a',
   city: '#c08a4a',
   district: '#a8804f',

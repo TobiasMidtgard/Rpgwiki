@@ -105,7 +105,44 @@ try {
   check('city tabs switch content', (await page.locator('.section').count()) > 0)
   await shot(page, '06-city-place')
 
+  /* --------------------------------------------------- rosters ---- */
+  // The Economy tab carries the categories derived from canon classification:
+  // flora, minerals, worked materials.
+  await page.getByRole('tab', { name: 'Economy', exact: true }).click()
+  await page.waitForTimeout(450)
+  const rosterLabels = await page.locator('.roster-label').allTextContents()
+  check('city sections list linked entries as roster categories', rosterLabels.length >= 2, rosterLabels.join(', '))
+  check('flora is separated from minerals', rosterLabels.includes('Flora') && rosterLabels.includes('Minerals & deposits'))
+
+  const firstRoster = page.locator('.roster-group').first()
+  check('roster starts collapsed', !(await firstRoster.evaluate((el) => el.open)))
+  await firstRoster.locator('.roster-summary').click()
+  await page.waitForTimeout(250)
+  check('roster opens', await firstRoster.evaluate((el) => el.open))
+
+  const card = firstRoster.locator('.roster-card').first()
+  check('roster cards carry artwork', (await card.locator('svg').count()) > 0)
+  check('roster cards carry a description', ((await card.locator('.roster-sum').textContent()) ?? '').length > 10)
+  const cardName = (await card.locator('.roster-name').textContent())?.trim()
+  await card.click()
+  await page.waitForTimeout(600)
+  check('roster card opens the entry', (await page.locator('h1').first().textContent())?.trim() === cardName, cardName ?? '')
+
+  // The open/closed choice is a preference, so it should outlive a reload.
+  await goto('/cities/city.gilded-ascent')
+  await page.getByRole('tab', { name: 'Economy', exact: true }).click()
+  await page.waitForTimeout(450)
+  check('roster remembers what was left open', await page.locator('.roster-group').first().evaluate((el) => el.open))
+
+  // A city with almost nothing linked must not invent entries to fill the page.
+  await goto('/cities/city.oruvai')
+  const thinTab = await page.locator('[role="tab"][aria-selected="true"]').textContent()
+  check('navigating to another city returns to its first tab', thinTab?.trim() === 'Overview', thinTab ?? '')
+  const thinCards = await page.locator('.roster-card').count()
+  check('a thin city shows few roster entries rather than filler', thinCards <= 8, `${thinCards} cards`)
+
   // Backlinks present
+  await goto('/cities/city.gilded-ascent')
   await page.locator('[role="tab"]').first().click()
   await page.waitForTimeout(300)
   check('backlinks panel present', (await page.getByText('Referenced by').count()) > 0)
