@@ -25,7 +25,12 @@ export default function Atlas() {
   const ui = useUiState()
   const [mode, setMode] = useLocalState<MapMode>('atlas.mode', 'paper')
   const [layerList, setLayerList] = useLocalState<MapLayerId[]>('atlas.layers', DEFAULT_LAYERS)
-  const [panelOpen, setPanelOpen] = useLocalState<boolean>('atlas.layerPanel', true)
+  // The layer list would cover most of a phone screen, so it starts closed
+  // there and open on anything with room for it.
+  const [panelOpen, setPanelOpen] = useLocalState<boolean>(
+    'atlas.layerPanel',
+    typeof window === 'undefined' || window.innerWidth > 900,
+  )
   const [selected, setSelected] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('')
@@ -136,7 +141,7 @@ export default function Atlas() {
       </div>
 
       {/* Top-right: layers -------------------------------------------- */}
-      <div className="map-overlay tr" style={{ right: selected ? 364 : undefined }}>
+      <div className={`map-overlay tr${selected ? ' shifted' : ''}`}>
         <div className="map-panel" style={{ width: 226 }}>
           <button
             type="button"
@@ -311,7 +316,7 @@ function Inspector({ id, onClose }: { id: string; onClose: () => void }) {
           </p>
         ) : null}
 
-        <dl className="kv" style={{ gridTemplateColumns: '96px 1fr', fontSize: 'var(--fs-sm)' }}>
+        <dl className="kv inspector-kv">
           {facts.slice(0, 9).map((d) => {
             const v = e.fields[d.key]
             return (

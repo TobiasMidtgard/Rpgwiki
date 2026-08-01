@@ -50,6 +50,9 @@ export const MAP_LAYERS: LayerDef[] = [
 
 /* Stable empty fallbacks so the expensive geometry memos do not thrash while
    the world is still loading. */
+/** The water plane. Sized to cover any viewBox the fit logic can produce. */
+const SEA = { x: -WORLD_W * 2, y: -WORLD_H * 3, w: WORLD_W * 5, h: WORLD_H * 7 }
+
 const EMPTY_REGIONS: RegionShape[] = []
 const EMPTY_ROUTES: RouteShape[] = []
 const EMPTY_ZONES: ZoneShape[] = []
@@ -291,10 +294,19 @@ export function WorldMap({
       setView((v) => {
         if (!fitted) {
           fitted = true
-          // Fit the whole world with a small margin, letterboxing into sea.
           const worldAspect = WORLD_W / WORLD_H
-          const vw = aspect >= worldAspect ? WORLD_H * aspect * 1.02 : WORLD_W * 1.02
-          const vh = vw / aspect
+          let vw = aspect >= worldAspect ? WORLD_H * aspect * 1.02 : WORLD_W * 1.02
+          let vh = vw / aspect
+          // Containing the world inside a viewport of a very different shape
+          // strands it in a field of empty sea. Past that point, fill the
+          // constraining axis instead and let the reader pan across.
+          if (vh > WORLD_H * 1.25) {
+            vh = WORLD_H * 1.08
+            vw = vh * aspect
+          } else if (vw > WORLD_W * 1.25) {
+            vw = WORLD_W * 1.08
+            vh = vw / aspect
+          }
           return { x: (WORLD_W - vw) / 2, y: (WORLD_H - vh) / 2, w: vw, h: vh }
         }
         const nh = v.w / aspect
@@ -426,9 +438,8 @@ export function WorldMap({
   // screen pixels, so they stay legible at any zoom and at any panel size.
   const px = size.w > 0 ? view.w / size.w : view.w / WORLD_W
   const s = (n: number) => n * px
-  /** Detail thresholds are in rendered pixels per 100 world units. */
-  const detail = 100 / px
-  const showLabel = (min: number) => detail >= min
+  /** Show a label only once the view is zoomed in past `maxPx` world-units-per-pixel. */
+  const showLabel = (maxPx: number) => px <= maxPx
 
   if (!world) return null
 
@@ -453,6 +464,8 @@ export function WorldMap({
         role={preview ? 'presentation' : 'application'}
         aria-label={preview ? undefined : 'World map. Arrow keys pan, plus and minus zoom, 0 resets.'}
       >
+        {/* Deliberately vast: a tall narrow viewport fits the world by width,
+            which makes the visible box several times the world's height. */}
         <defs>
           <filter id={`grain-${uid}`} x="0" y="0" width="100%" height="100%">
             <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="7" result="n" />
@@ -467,7 +480,7 @@ export function WorldMap({
           </clipPath>
           {/* Sea = everything outside the land ring; used for coastal shading. */}
           <clipPath id={`sea-${uid}`} clipRule="evenodd">
-            <path d={`M-200,-200 H${WORLD_W + 200} V${WORLD_H + 200} H-200 Z ${landPath}`} clipRule="evenodd" />
+            <path d={`M${SEA.x},${SEA.y} H${SEA.x + SEA.w} V${SEA.y + SEA.h} H${SEA.x} Z ${landPath}`} clipRule="evenodd" />
           </clipPath>
           <pattern id={`hatch-${uid}`} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="7" stroke={paper ? '#8a7550' : '#7d8b96'} strokeWidth="1.1" opacity="0.5" />
@@ -478,19 +491,13 @@ export function WorldMap({
         </defs>
 
         {/* Sea ------------------------------------------------------ */}
-        <rect
-          x={-200}
-          y={-200}
-          width={WORLD_W + 400}
-          height={WORLD_H + 400}
-          fill={paper ? '#aebfbd' : '#16232c'}
-        />
+        <rect x={SEA.x} y={SEA.y} width={SEA.w} height={SEA.h} fill={paper ? '#aebfbd' : '#16232c'} />
         {paper ? (
           <g clipPath={`url(#sea-${uid})`} opacity={0.5}>
-            {Array.from({ length: 64 }, (_, i) => (
+            {Array.from({ length: 160 }, (_, i) => (
               <path
                 key={i}
-                d={`M-200,${-160 + i * 28} H${WORLD_W + 200}`}
+                d={`M${SEA.x},${SEA.y + 40 + i * 40} H${SEA.x + SEA.w}`}
                 stroke="#93a8a6"
                 strokeWidth={0.8}
                 fill="none"
@@ -681,7 +688,7 @@ export function WorldMap({
                   stroke={paper ? '#3b3222' : '#0e0f11'}
                   strokeWidth={s(1.2)}
                 />
-                {showLabel(9) ? (
+                {showLabel(0.55) ? (
                   <text x={s(10)} y={s(3.5)} fontSize={s(11)} fill={inkSoft} className="node-sub" style={{ fontSize: s(11) }}>
                     {m.name}
                   </text>
@@ -716,7 +723,7 @@ export function WorldMap({
                 ) : (
                   <rect x={-s(4)} y={-s(4)} width={s(8)} height={s(8)} fill={paper ? '#efe6cc' : '#1b1f23'} stroke={paper ? '#3b3222' : '#a89070'} strokeWidth={s(1.5)} />
                 )}
-                {showLabel(7) ? (
+                {showLabel(0.75) ? (
                   <text x={0} y={s(15)} fontSize={s(10.5)} textAnchor="middle" fill={inkSoft} style={{ fontSize: s(10.5) }}>
                     {m.name}
                   </text>
@@ -746,7 +753,7 @@ export function WorldMap({
               >
                 <circle r={s(7)} fill="#0e0f11" opacity={0.35} />
                 <path d={`M${-s(3)},${-s(5)} L${s(4)},0 L${-s(3)},${s(5)} Z`} fill="#5fa3bd" stroke="#0e0f11" strokeWidth={s(1)} />
-                {showLabel(11) ? (
+                {showLabel(0.45) ? (
                   <text x={s(10)} y={s(3.5)} fontSize={s(11)} fill={inkSoft} style={{ fontSize: s(11) }}>
                     {m.name}
                   </text>
@@ -866,16 +873,7 @@ export function WorldMap({
             pointerEvents="none"
           />
         ) : null}
-        <rect
-          x={-200}
-          y={-200}
-          width={WORLD_W + 400}
-          height={WORLD_H + 400}
-          filter={`url(#grain-${uid})`}
-          fill="none"
-          pointerEvents="none"
-          opacity={0}
-        />
+
       </svg>
     </div>
   )

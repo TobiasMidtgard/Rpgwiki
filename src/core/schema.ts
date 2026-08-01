@@ -162,7 +162,7 @@ const CITY: TypeSchema = {
     refs('trade', 'imports', 'Imports', ['material', 'item', 'food']),
     long('trade', 'tradeNotes', 'Trade posture'),
 
-    refs('resources', 'localResources', 'Local resources', ['material', 'deposit']),
+    refs('resources', 'localResources', 'Local resources', ['material', 'deposit', 'creature', 'food']),
     long('resources', 'resourceNotes', 'Extraction notes'),
 
     long('defense', 'defense', 'Defenses'),
@@ -417,8 +417,8 @@ const NPC: TypeSchema = {
     text('overview', 'pronouns', 'Pronouns'),
     sel('overview', 'state', 'State', ['Alive', 'Missing', 'Imprisoned', 'Dead', 'Unknown'], { key_fact: true }),
     long('overview', 'appearance', 'Appearance'),
-    refs('place', 'home', 'Home', ['city', 'district', 'site'], { key_fact: true }),
-    refs('place', 'currentLocation', 'Current location', ['city', 'district', 'site', 'region'], { key_fact: true }),
+    refs('place', 'home', 'Home', ['city', 'district', 'landmark', 'site'], { key_fact: true }),
+    refs('place', 'currentLocation', 'Current location', ['city', 'district', 'landmark', 'site', 'region'], { key_fact: true }),
     text('work', 'occupation', 'Occupation', { key_fact: true }),
     long('work', 'standing', 'Standing'),
     long('personality', 'personality', 'Personality'),
@@ -488,7 +488,7 @@ const QUEST: TypeSchema = {
       key_fact: true,
     }),
     refs('start', 'questGiver', 'Quest giver', ['npc', 'faction'], { key_fact: true }),
-    refs('start', 'startLocation', 'Starting location', ['city', 'district', 'site', 'region'], { key_fact: true }),
+    refs('start', 'startLocation', 'Starting location', ['city', 'district', 'landmark', 'site', 'region'], { key_fact: true }),
     list('start', 'prerequisites', 'Prerequisites'),
     refs('start', 'recommendedSkills', 'Recommended skills', ['skill']),
     list('objectives', 'objectives', 'Objectives'),
@@ -500,8 +500,8 @@ const QUEST: TypeSchema = {
       { key: 'branch', label: 'Branch' },
       { key: 'reward', label: 'Reward' },
     ]),
-    refs('items', 'itemsRequired', 'Items required', ['item', 'material']),
-    refs('items', 'itemsConsumed', 'Items consumed', ['item', 'material']),
+    refs('items', 'itemsRequired', 'Items required', ['item', 'material', 'food']),
+    refs('items', 'itemsConsumed', 'Items consumed', ['item', 'material', 'food']),
     table('changes', 'npcChanges', 'NPC state changes', [
       { key: 'npc', label: 'NPC' },
       { key: 'change', label: 'Change' },
@@ -620,7 +620,7 @@ const MACHINE: TypeSchema = {
     sel('overview', 'machineType', 'Type', ['Refinery', 'Press', 'Kiln', 'Loom', 'Lift', 'Pump', 'Engine', 'Array', 'Terminal'], {
       key_fact: true,
     }),
-    refs('overview', 'location', 'Location', ['city', 'district', 'site', 'region'], { key_fact: true }),
+    refs('overview', 'location', 'Location', ['city', 'district', 'landmark', 'site', 'region'], { key_fact: true }),
     text('operate', 'operator', 'Required operator', { key_fact: true }),
     refs('operate', 'requiredSkills', 'Required skill', ['skill']),
     text('operate', 'controls', 'Controls'),

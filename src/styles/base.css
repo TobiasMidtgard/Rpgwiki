@@ -2895,3 +2895,41 @@ a.row-item:hover {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+
+/* ------------------------------------------------------------------
+   Atlas overlay adjustments
+   ------------------------------------------------------------------ */
+
+/* On desktop the inspector is a right-hand rail, so the layer panel steps
+   aside for it. On mobile the inspector is a bottom sheet and there is
+   nothing to avoid. */
+@media (min-width: 901px) {
+  .map-overlay.tr.shifted {
+    right: 364px;
+  }
+}
+
+.inspector-kv {
+  grid-template-columns: 96px 1fr;
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 900px) {
+  .inspector-kv {
+    grid-template-columns: 1fr;
+  }
+  /* Stack the atlas overlays instead of letting them collide. */
+  .map-overlay.tl {
+    right: var(--sp-2);
+    max-width: none;
+  }
+  .map-overlay.tr {
+    top: auto;
+    bottom: calc(var(--sp-2) + 30px);
+    right: var(--sp-2);
+    max-width: calc(100vw - 16px);
+  }
+  .map-overlay.bl {
+    display: none;
+  }
+}

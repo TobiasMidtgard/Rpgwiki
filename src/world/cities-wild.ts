@@ -589,7 +589,7 @@ export const entities: SeedEntity[] = [
       garrison: '2,200 sworn Pitchguard, plus a spring levy of 900 to 1,400',
 
       factionNotes:
-        '[[faction.pitchguard|The Pitchguard]] is not a faction in the city so much as the city with a rank structure. What competes is inside it: the six bole captains vote licences, and three of them now hold more charcoal contracts than tenancies, which makes them merchants with soldiers. [[faction.bonewrights-hall|The Bondwrights\' Hall]] has no office here and does excellent business anyway, since a yard debt with no schedule is an indenture in everything but name and can be sold on downriver. [[faction.standing-hour|The Standing Hour]] has tried twice to organise the pitch yards; both stewards are in the timber yards now, and their names are read out at every spring muster.',
+        '[[faction.pitchguard|The Pitchguard]] is not a faction in the city so much as the city with a rank structure. What competes is inside it: the six bole captains vote licences, and three of them now hold more charcoal contracts than tenancies, which makes them merchants with soldiers. [[faction.bondwrights-hall|The Bondwrights\' Hall]] has no office here and does excellent business anyway, since a yard debt with no schedule is an indenture in everything but name and can be sold on downriver. [[faction.standing-hour|The Standing Hour]] has tried twice to organise the pitch yards; both stewards are in the timber yards now, and their names are read out at every spring muster.',
 
       currentConflict: 'Heart rot in six boles, and a felling order with eleven days to run',
       problems: [
