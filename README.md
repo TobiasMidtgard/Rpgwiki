@@ -126,6 +126,22 @@ detection and the broken-reference check.
 - **Marker positions** are stored per entry and can be dragged in the atlas when editing is on.
   Deposits, sites and creatures are auto-scattered inside their region deterministically.
 
+**Panning does not redraw the map.** Rewriting the SVG `viewBox` repaints the whole chart, which
+measures around 40 ms a frame and — being rasterisation rather than script — does not get faster on
+a faster CPU. So the SVG is drawn larger than its container, up to 400px past each edge, and a drag
+slides it with a `translate3d` transform that the compositor handles without repainting. The
+`viewBox` is only rewritten when the gesture ends or the pre-drawn margin runs out: a long drag
+costs two repaints rather than one per pointer event. Two consequences worth knowing before
+changing `WorldMap`:
+
+- The slide is clamped through the same `clampView` as a real view change. If it were not, the chart
+  would slide somewhere the view cannot stay and snap back when it handed over.
+- Handing the slide back has to happen in one paint (hence the `flushSync`), or the chart shows the
+  old `viewBox` with the transform already cleared for a frame.
+
+`npm run verify:pan` guards both: it asserts a dragged marker tracks the pointer with no backwards
+step, and that a sustained drag leaks neither heap nor DOM nodes.
+
 ### Persistence
 
 IndexedDB, with a localStorage fallback for browsers that block it. Saves half a second after each
