@@ -13,8 +13,9 @@ import { CITY_POS, placeInRegion } from './geo'
 import { CITY_REGION } from './registry'
 import { REGION_SHAPES, ALL_ROUTES, ZONES } from './geo'
 
-/** Bump when seed content changes so untouched installs pick it up. */
-export const SEED_VERSION = 7
+import { SEED_VERSION } from './seedMeta'
+
+export { SEED_VERSION }
 
 interface ContentModule {
   entities?: SeedEntity[]

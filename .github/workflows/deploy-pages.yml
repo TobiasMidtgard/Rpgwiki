@@ -1,0 +1,66 @@
+# Builds the wiki and publishes it to GitHub Pages.
+#
+# The app is a static bundle: `base: './'` in vite.config.ts keeps asset URLs
+# relative so it works from the /Rpgwiki/ sub-path, and the app uses a hash
+# router so deep links survive a reload without any server-side rewrite rules.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [claude/rpg-world-wiki-nwusbi, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a run finish rather than cancelling it mid-deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Playwright is a dev dependency for the local browser checks; CI only
+      # needs to build, so skip the ~150 MB browser download.
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run build` runs `tsc -b` first, so a type error fails the deploy
+      # rather than shipping a broken bundle.
+      - run: npm run build
+
+      # Checks every seed entry against its type's schema, every select value
+      # against its options, and every reference against the entry set.
+      - run: npm run validate
+
+      - uses: actions/configure-pages@v5
+        with:
+          # Turns Pages on the first time this runs, so there is no manual
+          # settings step.
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

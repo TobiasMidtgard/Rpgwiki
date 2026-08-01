@@ -17,7 +17,7 @@ import { ENTITY_TYPES, RELATION_KINDS, STATUSES, isTbd } from '../src/core/types
 import type { SeedEntity, SeedRelation } from '../src/world/kit'
 
 const WORLD_DIR = path.resolve(import.meta.dirname, '../src/world')
-const MACHINERY = new Set(['kit.ts', 'registry.ts', 'geo.ts', 'seed.ts'])
+const MACHINERY = new Set(['kit.ts', 'registry.ts', 'geo.ts', 'seed.ts', 'seedMeta.ts'])
 
 interface Problem {
   level: 'error' | 'warn'

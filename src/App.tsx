@@ -8,7 +8,7 @@ import { Nav } from './components/Nav'
 import { SearchBar } from './components/SearchBar'
 import { ConfirmHost, Loading, ToastHost, toast } from './components/ui'
 import { canRedo, canUndo, loadWorld, redo, undo, useStoreStatus, useWorld } from './core/store'
-import { SEED_VERSION, buildSeed } from './world/seed'
+import { SEED_VERSION } from './world/seedMeta'
 import { toggleEditing, useUiState } from './core/uiState'
 import { QuickCreate } from './pages/QuickCreate'
 
@@ -45,7 +45,9 @@ export default function App() {
   const loc = useLocation()
 
   useEffect(() => {
-    loadWorld(buildSeed, SEED_VERSION).catch((err: unknown) => setBootError(String(err)))
+    loadWorld(() => import('./world/seed').then((m) => m.buildSeed()), SEED_VERSION).catch((err: unknown) =>
+      setBootError(String(err)),
+    )
   }, [])
 
   useEffect(() => {

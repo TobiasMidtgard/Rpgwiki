@@ -83,11 +83,15 @@ export function emptyWorld(): WorldState {
  * Reads persisted state, falling back to the seed. If a newer seed ships and
  * the user has never edited anything, the seed is adopted; otherwise their
  * work wins and the seed version is simply recorded.
+ *
+ * `seed` is a loader rather than a value because the seed is the largest asset
+ * in the project and most visits never need it — a returning reader's world
+ * comes straight back out of IndexedDB.
  */
-export async function loadWorld(seed: () => WorldState, seedVersion: number): Promise<void> {
+export async function loadWorld(seed: () => Promise<WorldState>, seedVersion: number): Promise<void> {
   const stored = await idbGet<WorldState>(STORAGE_KEY)
   if (!stored || !stored.entities || Object.keys(stored.entities).length === 0) {
-    state = seed()
+    state = await seed()
     state.meta.seedVersion = seedVersion
     loaded = true
     emit()
@@ -95,7 +99,7 @@ export async function loadWorld(seed: () => WorldState, seedVersion: number): Pr
     return
   }
   if (!stored.meta.touched && stored.meta.seedVersion !== seedVersion) {
-    state = seed()
+    state = await seed()
     state.meta.seedVersion = seedVersion
   } else {
     state = migrate(stored, seedVersion)
@@ -422,12 +426,10 @@ export function replaceWorld(next: WorldState, label = 'Import world') {
   commit(label, () => next)
 }
 
-export function resetToSeed(seed: () => WorldState, seedVersion: number) {
-  commit('Reset to seed', () => {
-    const s = seed()
-    s.meta.seedVersion = seedVersion
-    return s
-  })
+export async function resetToSeed(seed: () => Promise<WorldState>, seedVersion: number) {
+  const next = await seed()
+  next.meta.seedVersion = seedVersion
+  commit('Reset to seed', () => next)
 }
 
 /* ------------------------------------------------------------------ */

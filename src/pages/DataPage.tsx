@@ -11,7 +11,7 @@ import { byteSize, formatBytes } from '../core/db'
 import { download, exportJson, importJson, worldToMarkdown } from '../core/io'
 import { replaceWorld, resetToSeed, saveNow, useStoreStatus, useWorld } from '../core/store'
 import { buildIndex } from '../core/relations'
-import { SEED_VERSION, buildSeed } from '../world/seed'
+import { SEED_VERSION } from '../world/seedMeta'
 import { entityPathById } from '../components/EntityLink'
 import { EmptyState, confirmAction, toast } from '../components/ui'
 
@@ -262,7 +262,7 @@ export default function DataPage() {
                   danger: true,
                 })
                 if (ok) {
-                  resetToSeed(buildSeed, SEED_VERSION)
+                  await resetToSeed(() => import('../world/seed').then((m) => m.buildSeed()), SEED_VERSION)
                   await saveNow()
                   toast('World reset to the shipped seed', 'ok')
                 }

@@ -9,6 +9,9 @@ export default defineConfig({
   plugins: [react()],
   build: {
     target: 'es2022',
-    chunkSizeWarningLimit: 900,
+    // The seed world is one large data chunk by design. It is code-split out
+    // of the entry bundle and only fetched on a first visit, so its size is
+    // not a startup cost for returning readers.
+    chunkSizeWarningLimit: 2600,
   },
 })

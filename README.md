@@ -4,6 +4,16 @@ An interactive world atlas, connected lore encyclopedia and game-design database
 worldbuilding project. It runs entirely in the browser, persists what you write, and is editable
 without touching code.
 
+**Live: https://tobiasmidtgard.github.io/Rpgwiki/**
+
+Every push to the default branch rebuilds and republishes it
+(`.github/workflows/deploy-pages.yml`). The deploy fails rather than shipping if the TypeScript
+build or the seed validator does.
+
+Because there is no server, the world you edit on the published site lives in *your* browser.
+Two people opening the link get the same seed and then diverge — use **Data, backup and import**
+to move a world between browsers or people.
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173
@@ -69,7 +79,8 @@ src/
     registry.ts    canonical ids and the canon anchors
     geo.ts         coastline, region generation, rivers, roads, trade and smuggling routes
     kit.ts         E() / R() / TBD() authoring helpers and payload types
-    seed.ts        assembles every content module into a world
+    seed.ts        assembles every content module into a world (lazily loaded)
+    seedMeta.ts    just the seed version, so the app can skip loading the seed
     *.ts           the content modules themselves
   art/           deterministic procedural artwork (city vistas, crests, section banners)
   components/    map, editors, links, backlinks, city plans, shared primitives
@@ -112,7 +123,9 @@ detection and the broken-reference check.
 ### Persistence
 
 IndexedDB, with a localStorage fallback for browsers that block it. Saves half a second after each
-change. There is no server and nothing leaves the browser — so export a JSON backup from
+change. The seed is code-split out of the entry bundle and only fetched on a first visit — after
+that the world is read straight back out of IndexedDB, so a return visit downloads about 66 kB
+rather than 800 kB. There is no server and nothing leaves the browser — so export a JSON backup from
 **Data, backup and import** if it matters. JSON round-trips losslessly; Markdown is a one-way
 export for reading or committing.
 
@@ -169,5 +182,5 @@ export const entities: SeedEntity[] = [
 export const relations: SeedRelation[] = [R('faction.example', 'controls', CITY.gildedAscent)]
 ```
 
-Bump `SEED_VERSION` in `seed.ts` so installs that have not been edited pick the change up. Once a
+Bump `SEED_VERSION` in `seedMeta.ts` so installs that have not been edited pick the change up. Once a
 user edits anything, their work is never overwritten by a seed upgrade.
